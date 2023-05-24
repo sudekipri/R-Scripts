@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<gpx version="1.1" creator="GDAL 2.2.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ogr="http://osgeo.org/gdal" xmlns="http://www.topografix.com/GPX/1/1" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+<metadata><bounds minlat="17.608367494452200" minlon="-110.873361582102007" maxlat="27.923989661218300" maxlon="-101.464393769159003"/></metadata>              
+<wpt lat="17.6083674944522" lon="-101.464393769159003">
+  <name>zihuatanejo_airport</name>
+</wpt>
+<wpt lat="17.9418848245313" lon="-102.180906645785996">
+  <name>Lazaro Cardenas</name>
+</wpt>
+<wpt lat="19.0874202763775" lon="-104.296930658169003">
+  <name>Manzanillo</name>
+</wpt>
+<wpt lat="20.6550647465818" lon="-105.240121672106">
+  <name>Puerto_vallarta</name>
+</wpt>
+<wpt lat="23.250449706878602" lon="-106.420188804009001">
+  <name>Mazatlan</name>
+</wpt>
+<wpt lat="24.142416173578301" lon="-110.313173116490006">
+  <name>LaPaz</name>
+</wpt>
+<wpt lat="27.9239896612183" lon="-110.873361582102007">
+  <name>Guaymas</name>
+</wpt>
+</gpx>

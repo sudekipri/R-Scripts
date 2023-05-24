@@ -1,0 +1,796 @@
+---
+title: "HMW1_Sude_Buket_Kipri.qmd"
+output: html_document
+date: "2023-03-23"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Out-of-class questions
+
+```{r}
+library(sf)
+library(terra)
+library(tidyverse)
+library(spData)
+library(here)
+library(purrr)
+```
+
+```{r}
+data(us_states)
+# E1. Create a new object called us_states_name
+us_states_name <- us_states %>%
+  select(NAME)
+
+# Check the class of the new object
+class(us_states_name)
+```
+
+```{r}
+# E2. Select columns from the us_states object which contain population data
+
+# Method 1: Using dplyr's select() function with the matches() helper function and a regular expression
+us_states_pop1 <- us_states %>%
+  select(matches("total_pop_(10|15)"))
+
+# Method 2: Using dplyr's select() function to select columns by name
+us_states_pop2 <- us_states %>%
+  select(total_pop_10, total_pop_15)
+
+# Method 3: Using dplyr's select() function with the starts_with() helper function
+us_states_pop3 <- us_states %>%
+  select(starts_with("total_pop_"))
+
+# Method 4: Using base R's subset() function with grepl() for pattern matching
+us_states_pop4 <- subset(us_states, select = grepl("total_pop_(10|15)", colnames(us_states)))
+```
+
+```{r}
+# Remove the geometry column using the st_drop_geometry() function
+us_states_pop1 <- us_states_pop1 %>% st_drop_geometry()
+us_states_pop2 <- us_states_pop2 %>% st_drop_geometry()
+us_states_pop3 <- us_states_pop3 %>% st_drop_geometry()
+us_states_pop4 <- us_states_pop4 %>% st_drop_geometry()
+```
+
+```{r}
+library(ggplot2)
+library(units)
+```
+
+```{r}
+# E3. Find all states with the following characteristics
+
+midwest_states <- us_states %>% filter(REGION == "Midwest")
+west_states <- us_states %>% filter(
+  REGION == "West",
+  AREA < set_units(250000, km^2),
+  total_pop_15 > 5000000
+)
+south_states <- us_states %>% filter(
+  REGION == "South",
+  AREA > set_units(150000, km^2) | total_pop_15 > 7000000
+)
+
+# Combine the filtered datasets
+all_filtered_states <- bind_rows(midwest_states, west_states, south_states)
+
+```
+
+```{r}
+# Plot the filtered data
+ggplot() +
+  geom_sf(data = all_filtered_states, aes(fill = REGION)) +
+  scale_fill_manual(values = c("Midwest" = "orange", "West" = "blue", "South" = "green"),
+                    name = "Region") +
+  labs(title = "Filtered US States by Region",
+       subtitle = "Midwest, West (area < 250,000 km2 & population > 5,000,000), and South (area > 150,000 km2 or population > 7,000,000)") +
+  theme_minimal()
+
+```
+
+```{r}
+# E4. Calculate the total population in 2015
+total_population_2015 <- sum(us_states$total_pop_15, na.rm = TRUE)
+
+# Calculate the minimum and maximum total population in 2015
+min_population_2015 <- min(us_states$total_pop_15, na.rm = TRUE)
+max_population_2015 <- max(us_states$total_pop_15, na.rm = TRUE)
+
+# Display the results
+cat("Total population in 2015:", total_population_2015, "\n")
+cat("Minimum population in 2015:", min_population_2015, "\n")
+cat("Maximum population in 2015:", max_population_2015, "\n")
+
+```
+
+```{r}
+# E5. Count the number of states in each region
+states_by_region <- us_states %>%
+  group_by(REGION) %>%
+  summarize(n_states = n())
+
+# Display the results
+print(states_by_region)
+
+```
+
+```{r}
+# E6. Calculate the minimum, maximum, and total population in 2015 for each region
+pop_stats_by_region <- us_states %>%
+  group_by(REGION) %>%
+  summarize(
+    min_population_2015 = min(total_pop_15, na.rm = TRUE),
+    max_population_2015 = max(total_pop_15, na.rm = TRUE),
+    total_population_2015 = sum(total_pop_15, na.rm = TRUE)
+  )
+
+# Display the results
+print(pop_stats_by_region)
+
+```
+
+```{r}
+# E7. Add variables from us_states_df to us_states and create a new object called us_states_stats
+# Convert the us_states object to a data frame
+us_states_df1 <- as.data.frame(us_states)
+
+# Update the column names to match the correct column in your dataset
+us_states_stats_df <- left_join(us_states_df1, us_states_df, by = c("NAME" = "state"))
+
+# Convert the resulting data frame to an "sf" object
+us_states_stats <- st_as_sf(us_states_stats_df)
+
+# Display the first few rows of the new dataset
+head(us_states_stats)
+
+# Check the class of the new object
+class(us_states_stats)
+```
+
+```{r}
+# E8. Find the extra rows in us_states_df using anti_join()
+extra_rows <- anti_join(us_states_df, us_states_df1, by = c("state" = "NAME"))
+
+# Display the extra rows
+extra_rows
+```
+
+```{r}
+# E9. Population densities.
+# Calculate the population density in 2015
+us_states_stats$pop_density_2015 <- us_states_stats$total_pop_15 / us_states_stats$AREA
+
+# Calculate the population density in 2010
+us_states_stats$pop_density_2010 <- us_states_stats$total_pop_10 / us_states_stats$AREA
+
+# Display the first few rows of the dataset with the new variables
+head(select(us_states_stats, NAME, pop_density_2015, pop_density_2010))
+```
+
+```{r}
+# E10. Calculate the change in population density between 2010 and 2015
+# Remove the unit component from the population density variables
+us_states_stats$pop_density_2015 <- as.numeric(us_states_stats$pop_density_2015)
+us_states_stats$pop_density_2010 <- as.numeric(us_states_stats$pop_density_2010)
+
+us_states_stats <- us_states_stats %>%
+  mutate(pop_density_change = (pop_density_2015 - pop_density_2010) / pop_density_2010 * 100)
+
+# Create a map of the population density change
+ggplot(us_states_stats) +
+  geom_sf(aes(fill = pop_density_change)) +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", na.value = "gray70") +
+  labs(title = "Percentage change in population density between 2010 and 2015",
+       fill = "Percentage change") +
+  theme_void()
+```
+
+```{r}
+# E11. Change the columns' names in us_states to lowercase.
+# Convert column names to lowercase
+colnames(us_states) <- tolower(colnames(us_states))
+
+# Display the updated column names
+colnames(us_states)
+```
+
+```{r}
+# E12. Create an object called us_states_sel
+# Select the median_income_15 and geometry columns from us_states_df and us_states
+us_states_sel <- left_join(
+  select(us_states_df, state, median_income_15),
+  select(us_states, name, geometry),
+  by = c("state" = "name")
+) %>%
+  # Rename the median_income_15 column to Income
+  rename(Income = median_income_15)
+
+# Display the first few rows of the new dataset
+head(us_states_sel)
+
+```
+
+```{r}
+# E13. Calculate the change in the number of residents living below the poverty level between 2010 and 2015 for each state.
+
+# Compute the change in poverty levels between 2010 and 2015
+poverty_change <- us_states_df %>%
+  mutate(poverty_change = poverty_level_15 - poverty_level_10) %>%
+  select(state, poverty_change)
+
+# Join poverty_change data with us_states data
+us_states_pov <- left_join(
+  select(us_states, name, total_pop_10, total_pop_15),
+  poverty_change,
+  by = c("name" = "state")
+)
+
+# Calculate the change in the number of residents living below poverty level between 2010 and 2015
+us_states_pov <- us_states_pov %>%
+  mutate(pop_pov_change = (poverty_change / total_pop_10) * 100)
+
+# Display the resulting dataset
+head(us_states_pov)
+
+```
+
+```{r}
+# E14. Calculate the minimum, average and maximum state's number of people living below the poverty line in 2015 for each region
+# Merging us_states_pov with us_states
+us_states_pov_with_region <- us_states_pov %>%
+  left_join(us_states_df1, by = c("name" = "NAME"))
+
+# Merging us_states_pov_with_region with us_states_df
+merged_data <- us_states_pov_with_region %>%
+  left_join(us_states_stats_df, by = c("name" = "NAME"))
+
+# Calculate min, mean, and max for each region
+results <- merged_data %>%
+  group_by(REGION.y) %>%
+  summarise(min_poverty_15 = min(poverty_level_15, na.rm = TRUE),
+            avg_poverty_15 = mean(poverty_level_15, na.rm = TRUE),
+            max_poverty_15 = max(poverty_level_15, na.rm = TRUE))
+
+# Print results
+print(results)
+
+# Bonus: Region with the largest increase in people living below the poverty line
+largest_increase <- merged_data %>%
+  group_by(REGION.y) %>%
+  summarise(total_poverty_change = sum(poverty_change, na.rm = TRUE)) %>%
+  arrange(desc(total_poverty_change)) %>%
+  slice(1)
+
+# Print region with the largest increase
+print(largest_increase)
+
+```
+
+```{r}
+# E15. Create a raster from scratch with nine rows and columns and a resolution of 0.5 
+# Load raster library
+library(sp)
+library(raster)
+
+# Create an empty raster with 9 rows, 9 columns, and 0.5 decimal degrees resolution
+r <- raster(nrows = 9, ncols = 9, xmn = 0, xmx = 4.5, ymn = 0, ymx = 4.5, crs = "+proj=longlat +datum=WGS84")
+
+# Fill the raster with random numbers
+r[] <- runif(ncell(r))
+
+# Print the raster
+print(r)
+```
+
+```{r}
+# E16. What is the most common class of our example raster ground?
+# Extract values of the four corner cells
+top_left <- r[1, 1]
+top_right <- r[1, 9]
+bottom_left <- r[9, 1]
+bottom_right <- r[9, 9]
+
+# Print the corner values
+cat("Top left:", top_left, "\nTop right:", top_right, "\nBottom left:", bottom_left, "\nBottom right:", bottom_right, "\n")
+
+# Find the most common class (mode) of the raster
+library(modeest)
+r_values <- getValues(r)
+r_mode <- mfv(r_values)
+
+# Print the mode
+cat("The most common class (mode) of the example raster ground is:", r_mode, "\n")
+```
+
+```{r}
+# E17. Plot the histogram and the boxplot of the dem.tif file
+data(nz, package = "spData")
+data(nz_height, package = "spData")
+# Install and load the required packages
+library(spDataLarge)
+
+# Load the dem.tif file
+dem_file <- system.file("raster/dem.tif", package = "spDataLarge")
+dem_raster <- raster(dem_file)
+
+# Plot the histogram
+hist(dem_raster, main = "DEM Histogram", xlab = "Elevation (m)", col = "lightblue")
+
+# Create a data frame with elevation values for ggplot2 boxplot
+dem_values <- data.frame(Elevation = getValues(dem_raster))
+
+# Plot the boxplot
+ggplot(data = dem_values, aes(y = Elevation)) +
+  geom_boxplot() +
+  theme_bw() +
+  labs(title = "DEM Boxplot", y = "Elevation (m)")
+
+
+```
+
+```{r}
+# E18. How many of these high points does the Canterbury region contain?
+# Filter the 100 highest points in New Zealand
+top_100_heights <- nz_height %>%
+  arrange(desc(elevation)) %>%
+  head(100)
+
+# Convert nz data to the same CRS as nz_height data
+nz_transformed <- st_transform(nz, st_crs(nz_height))
+
+# Spatial join to find which region each high point belongs to
+top_100_heights_with_regions <- st_join(top_100_heights, nz_transformed)
+
+# Count the number of highest points in the Canterbury region
+canterbury_high_points <- top_100_heights_with_regions %>%
+  filter(Name == "Canterbury") %>%
+  nrow()
+
+cat("The Canterbury region contains", canterbury_high_points, "of the 100 highest points in New Zealand.\n")
+```
+
+```{r}
+# E19. Which region has the second highest number of nz_height points in, and how many does it have?
+# Spatial join to find which region each height point belongs to
+heights_with_regions <- st_join(nz_height, nz_transformed)
+
+# Count the number of height points in each region and sort in descending order
+region_height_counts <- heights_with_regions %>%
+  group_by(Name) %>%
+  summarise(height_count = n()) %>%
+  arrange(desc(height_count))
+
+# Get the region with the second highest number of height points
+second_highest_region <- region_height_counts[2, ]
+
+cat("The region with the second highest number of nz_height points is", second_highest_region$Name,
+    "with", second_highest_region$height_count, "points.\n")
+```
+
+```{r}
+# E20. how many of New Zealand's 16 regions contain points which belong to the top 100 highest points in the country? 
+# Count the number of highest points in each region
+region_high_point_counts <- top_100_heights_with_regions %>%
+  group_by(Name) %>%
+  summarise(height_count = n()) %>%
+  arrange(desc(height_count))
+
+# Print the table of regions with their number of highest points
+print(region_high_point_counts)
+
+# Count the number of regions containing the top 100 highest points
+num_regions <- nrow(region_high_point_counts)
+
+cat("\n", num_regions, "of New Zealand's 16 regions contain points which belong to the top 100 highest points in the country.\n")
+```
+
+```{r}
+# E21. Reclassify the elevation in three classes and compute the mean NDVI and the mean elevation for each altitudinal class.
+# Load the DEM and NDVI rasters
+dem <- raster(system.file("raster/dem.tif", package = "spDataLarge"))
+ndvi <- raster(system.file("raster/ndvi.tif", package = "spDataLarge"))
+
+# Reclassify the elevation into three classes: low (<300), medium (300-500), and high (>500)
+elevation_classes <- reclassify(dem, c(-Inf, 300, 1, 300, 500, 2, 500, Inf, 3))
+
+# Create a data frame with elevation class, NDVI, and elevation values
+df <- data.frame(
+  elevation_class = getValues(elevation_classes),
+  NDVI = getValues(ndvi),
+  elevation = getValues(dem)
+)
+
+# Replace the numeric elevation class values with descriptive labels
+df$elevation_class <- factor(df$elevation_class, levels = c(1, 2, 3), labels = c("low", "medium", "high"))
+
+# Compute the mean NDVI and mean elevation for each altitudinal class
+mean_values <- df %>%
+  group_by(elevation_class) %>%
+  summarise(
+    mean_elevation = mean(elevation, na.rm = TRUE),
+    mean_NDVI = mean(NDVI, na.rm = TRUE)
+  )
+
+# Print the mean values for each altitudinal class
+print(mean_values)
+
+
+
+```
+
+```{r}
+# E22. Calculate the Normalized Difference Water Index, calculate a correlation between NDVI and NDWI for this area.
+# Load the Landsat image
+landsat <- stack(system.file("raster/landsat.tif", package = "spDataLarge"))
+
+# Extract the red (Band 2), green (Band 3), and NIR (Band 4) bands
+red <- landsat[[2]]
+green <- landsat[[3]]
+nir <- landsat[[4]]
+
+# Calculate NDVI using the Landsat image
+NDVI_landsat <- (nir - red) / (nir + red)
+
+# Calculate NDWI
+NDWI <- (green - nir) / (green + nir)
+
+# Calculate the correlation between NDVI and NDWI
+ndvi_values <- getValues(NDVI_landsat)
+ndwi_values <- getValues(NDWI)
+
+correlation <- cor(ndvi_values, ndwi_values, use = "pairwise.complete.obs")
+
+cat("The correlation between NDVI and NDWI is:", correlation, "\n")
+
+
+```
+
+```{r}
+# E23. Retrieve a digital elevation model of Spain, and compute a raster which represents distances to the coast across the country
+library(geodata)
+
+# Define a file path to store elevation data
+elevation_file_path <- "spain_elevation.tif"
+
+# Retrieve the elevation data for Spain
+elevation <- geodata::elevation_30s(country = "Spain", path = elevation_file_path)
+
+# Create a reference raster with the desired resolution
+ref_raster <- terra::aggregate(elevation, fact = c(6, 6), fun = mean)
+
+# Resample the elevation raster using the reference raster
+elevation_resampled <- terra::resample(elevation, ref_raster, method = "bilinear")
+
+# Create a binary raster representing the coastline
+coastline <- ifel(elevation_resampled > 0, 1, 0)
+
+# Compute the distance to the coastline
+dist_to_coast <- terra::distance(coastline)
+
+# Convert the distances from meters to kilometers
+dist_to_coast_km <- dist_to_coast / 1000
+
+# Save the distance raster to a file
+writeRaster(dist_to_coast_km, "distance_to_coast_km.tif", overwrite = TRUE)
+
+```
+
+```{r}
+# E24. Try to modify the approach used in the above exercise by weighting the distance raster with the elevation raster
+
+# Weight the distance raster with the elevation raster
+weighted_dist_to_coast_km <- dist_to_coast_km + (elevation_resampled / 100) * 10
+
+# Compute the difference between the Euclidean distance and the weighted distance
+diff_raster <- weighted_dist_to_coast_km - dist_to_coast_km
+
+# Save the difference raster to a file
+writeRaster(diff_raster, "difference_raster.tif", overwrite = TRUE)
+
+# Visualize the difference raster
+plot(diff_raster, main = "Difference between Euclidean and elevation-weighted distances")
+
+```
+
+### In-class exercises.
+
+```{r}
+# E25. Find which farmers should we train to get the most benefits. Construct a 1km buffer around each point, and classify the plots inside each buffer as neighbors of such a point. Then find which are the 10 most central plots. Draw a map of the original points, a map of the buffers, and print the head of the neighbors' table.
+library(readr)
+udry2010 <- read_csv(here("data","udry2010.csv"),show_col_types = FALSE)
+
+# Convert to spatial data frame
+udry2010_sf <- st_as_sf(udry2010, coords = c("xcoord", "ycoord"), crs = 4326)
+
+# Create 1km buffers around each point
+buffers <- st_buffer(udry2010_sf, dist = 1000)
+
+# Identify which plots fall within each buffer
+neighbors <- st_intersection(buffers, udry2010_sf)
+
+# Calculate the number of neighbors for each plot
+central <- neighbors %>%
+  group_by(plot) %>%
+  summarize(neighbors = n()) %>%
+  arrange(desc(neighbors)) %>%
+  head(10)
+
+# Print the top 10 most central plots
+print(central)
+
+# Plot the original points
+plot(udry2010_sf$geometry)
+
+# Plot the buffers
+plot(buffers$geometry, add = TRUE, col = "blue")
+
+# Plot the most central points
+plot(udry2010_sf[central$plot,], pch = 20, col = "red", add = TRUE)
+```
+
+```{r}
+# E26. Display a single map showing the Mexican ports, the most violent municipalities by absolute change (use bubbles), and the municipalities affected by fentanyl seizures (by polygon-coloring).
+drug_data = readRDS(here("data","drug_regions","poppy_mari_fent_ports.RData"))
+(fent_data = drug_data$fent_inegi_match) 
+fent_inegi_match_df <- as.data.frame(fent_data)
+mex_mun = st_read(here("data","drug_regions",
+                       "mexico_polygons",
+                       "Municipios_2010_5.shp"))
+mex_mun = mex_mun %>% 
+  mutate(idmun = paste0(CVE_ENT,CVE_MUN)) %>% 
+  dplyr::select(idmun)
+head(mex_mun)
+(hom_mex = readRDS(here("data","hom_mex.RData")))
+mex_cont = st_read(here("data","drug_regions","ContornoMex","contdv1mgw.shp"))
+```
+
+```{r}
+(fent_data_mun = fent_inegi_match_df %>% 
+  group_by(idmun) %>% 
+  summarise(seizures = n()) 
+)
+fent_data_mun =  fent_data_mun %>% 
+  left_join(mex_mun, by = "idmun")
+head(fent_data_mun) 
+fent_data_mun =  fent_data_mun %>% st_as_sf()
+
+(inegi_ports = drug_data$inegi_ports) 
+inegi_ports_df <- as.data.frame(inegi_ports)
+ports_data =  inegi_ports_df %>% 
+  inner_join(mex_mun,by = "idmun") %>% 
+  st_as_sf()
+```
+
+```{r}
+hom_mex = hom_mex %>%
+  mutate(hom = hom+1) %>% # to avoid undefined numbers (c/0).
+  
+  group_by(idmun) %>% # the growth rates are specific to each municipality.
+  
+  mutate(perc_change = ((hom - lag(hom)) / lag(hom)) * 100) %>% # lag will be useful here
+  
+  mutate(abs_change = (hom - lag(hom))) # now compute the absolute change.
+(hom_mex_1 = hom_mex %>% 
+  na.omit() %>% 
+  group_by(idmun) %>% 
+  summarise(mean_perc_change = mean(perc_change),
+            mean_abs_change = mean(abs_change))
+)  
+(aux = quantile(hom_mex_1$mean_perc_change, 0.98))
+
+hom_mex_perc = hom_mex_1 %>%
+  mutate(dist = quantile(mean_perc_change, 0.98),
+          
+          high_hom = ifelse(mean_perc_change >= dist, 1, 0)
+          
+          )
+
+mex_hom = mex_mun %>% 
+  left_join(hom_mex_1, by = "idmun") %>% 
+  na.omit()
+
+
+```
+
+```{r}
+# E26. Displaying the map
+# Get the 98th percentile of mean_abs_change
+abs_change_threshold <- quantile(hom_mex_1$mean_abs_change, 0.98)
+
+# Filter the most violent municipalities by absolute change
+mex_hom_abs <- hom_mex_1 %>%
+  filter(mean_abs_change >= abs_change_threshold) %>%
+  left_join(mex_mun, by = "idmun")
+
+# Convert the data.frame back to an sf object
+mex_hom_abs <- st_as_sf(mex_hom_abs)
+
+# Now, create the map
+library(tmap)
+
+tm_shape(mex_cont) +
+  tm_polygons() +
+  tm_shape(fent_data_mun) +
+  tm_polygons(col = "red", alpha = 0.5) +
+  tm_shape(mex_hom_abs) +
+  tm_bubbles("mean_abs_change", col = "blue", border.col = "white", size.lim = c(0.1, 1)) +
+  tm_shape(ports_data) +
+  tm_dots(col = "green", size = 2, shape = 22)
+```
+
+```{r}
+# E27. Obtain something by filling the blanks in the code below
+library(gapminder)
+imf_data = readRDS(here("data","imf_data.rds"))
+world_bank_data = readRDS(here("data","world_bank_data.rds"))
+ANZ <- c("Australia", "New Zealand")
+SEA <- c("Cambodia", "Indonesia", "Malaysia", "Myanmar", "Philippines", 
+         "Singapore", "Thailand", "Vietnam")
+SA <- c("Bangladesh", "India", "Nepal", "Pakistan", "Sri Lanka")
+EA <- c("China", "Hong Kong, China", "Japan", "Korea, Dem. Rep.", "Korea, Rep.", 
+        "Taiwan")
+(gapminder)
+```
+
+```{r}
+# E27. Obtain something by filling the blanks in the code below
+RegDat <- list(ANZ=ANZ, SEA=SEA, SA=SA, EA=EA) %>%
+  map(~ filter(gapminder, country%in% .x)) %>%
+  map(~ group_by(.x, year)) %>%
+  map_df(~ summarise(.x, mean_lifeExp = mean(lifeExp, na.rm = TRUE),
+                          mean_gdpPercap = mean(gdpPercap, na.rm = TRUE)),
+         .id = "region")
+
+# explain the purppose of .id = "region"
+# The .id argument in the map_df() function is used to create a new column in the resulting data frame, which will store the name of the list element being processed. In this case, it will create a column named "region" and fill it with the keys of the list (ANZ, SEA, SA, EA), associating each row with its corresponding region.
+
+# explain what does map_df do for us above.
+#  It applies a function to each element of a list and combines the results into a single data frame. In the code above, it applies the summarise function to each region's data frame and binds the results together in a single data frame, including the new "region" column created by the .id argument.
+
+```
+
+```{r}
+# E28. Compute routes for several end-start points
+library(rlang)
+library(osrm)
+
+drug_data = readRDS(here("Data","drug_regions","poppy_mari_fent_ports.RData"))
+
+mex_hom = readRDS(here("Data","hom_mex.RData"))
+
+cross_p = st_read(here("Data","cross_p",
+                       "yv333xj1559.shp"))
+
+mex_shore = st_read(here("Data","drug_regions","ContornoMex","contdv1mgw.shp")) %>% 
+  filter(COV_ID == 404) %>% 
+  st_as_sfc()
+
+mex_mun = st_read(here("Data","drug_regions",
+                       "mexico_polygons",
+                       "Municipios_2010_5.shp")) %>% 
+  mutate(idmun = paste0(CVE_ENT,CVE_MUN)) %>% 
+  dplyr::select(idmun)
+
+front_states = c("TX", "AZ", "NM", "CA")
+
+ports = st_read(here("data", "pacific_ports", "My_Places.gpx"))
+
+cross_p_mex = cross_p %>% 
+  filter(state %in% front_states)
+
+cross_p_mex_top = cross_p_mex %>% 
+   slice_max(order_by = trucks, prop = .15)
+
+(my_map = tm_shape(mex_shore) +
+  tm_polygons() +
+  tm_shape(cross_p_mex) + 
+  tm_dots(size = .4) +
+  tm_shape(cross_p_mex_top) + 
+  tm_dots(size = 1.5, col = "blue") +
+  tm_shape(ports) + 
+  tm_dots(size=.4, col = "green")
+)
+
+#COMPLETING THE CODE GIVEN IN THE QUESTION
+
+start_end_route = function(names_vec = c("zihuatanejo_airport","Hidalgo"),
+                           col_names = c("Name","portname"),
+                           data_1 = ports,
+                           data_2 = cross_p_mex_top){
+  col_1 = col_names[1]
+  col_2 = col_names[2]
+  name_1 = names_vec[1]
+  name_2 = names_vec[2]
+  entrega = osrmRoute(src = filter(data_1,!!sym(col_1) == name_1),
+                   dst = filter(data_2,!!sym(col_2) == name_2))
+}
+
+
+data_1 = ports
+data_2 = cross_p_mex_top
+
+list_start_end_route = function(names_list,col_names,data1,data2){
+    output = purrr::map(names_list,~start_end_route(names_vec = .x,
+                                                     col_names = col_names,
+                                                     data_1 = data_1,
+                                                     data_2 = data_2))
+    the_names = purrr::map(names_list,~paste(.x[1],.x[2],sep = ".to."))
+    names(output) = the_names
+    return(output)
+}
+```
+
+```{r}
+# E28. Using my results from above to expand my_map displaying all the three routes.
+names_list = list(c("zihuatanejo_airport","Hidalgo"),
+                  c("zihuatanejo_airport","Laredo"),
+                  c("Mazatlan","Calexico East"))
+
+
+col_names = c("name","portname")
+
+route_list = list_start_end_route(names_list,col_names,data1,data2)
+
+my_map +
+  tm_shape(route_list$zihuatanejo_airport.to.Hidalgo) +
+  tm_lines(lwd = 2, col = "blue") + 
+  tm_shape(route_list$zihuatanejo_airport.to.Laredo) +
+  tm_lines(lwd = 2, col = "orange") +
+  tm_shape(route_list$`Mazatlan.to.Calexico East`) +
+  tm_lines(lwd = 2, col = "red")
+```
+
+```{r}
+# E29. Find the prehispanic and colonial points inside each prehispanic polygon and count them.
+# Load the dataset and create the objects. 
+load(here("data","mex_historic.RData"))
+mex = world %>% 
+  filter(name_long == "Mexico")
+
+ggplot() + 
+  geom_sf(data = mex) + 
+  geom_sf(data = prehisp_poly) + 
+  geom_sf(data = prehisp_points)
+
+ggplot() + 
+  geom_sf(data = prehisp_poly) + 
+  geom_sf(data = prehisp_points)
+
+ggplot() + 
+  geom_sf(data = prehisp_poly) + 
+  geom_sf(data = colonial_points)
+```
+
+```{r}
+# E29. 1. Find the prehispanic and colonial points inside each prehispanic polygon and count them. THIS IS THE CODE WE WROTE IN CLASS, HOWEVER; FOR SOME REASON, AFTER RUNNING PREVIOUS CHUNKS IT'S NOT WORKING. TERMINATING R AND RUNNING AGAIN GIVES THE CORRECT OUTPUT. 
+prehisp_poly_col_p =  select(prehisp_poly,Name) %>% 
+  st_join(select(colonial_points,Placename), join = st_contains) %>% 
+  group_by(Name) %>% 
+  summarise(colonial_towns = n()) %>% 
+  st_join(prehisp_points, join = st_contains) %>% 
+  group_by(Name) %>% 
+  mutate(prehisp_towns = n()) %>% 
+  select(-id) %>% 
+  distinct() %>% 
+  select(colonial_towns,prehisp_towns) %>% 
+  st_drop_geometry()
+
+```
+
+```{r}
+# E29. 2. Use ggplot to produce a scatter plot where the x-axis represents the number of prehispanic towns, and the y-axis refers to the number of colonial settlements.
+# Create the scatter plot
+ggplot(data = prehisp_poly_col_p, aes(x = prehisp_towns, y =  colonial_towns))  +
+  geom_point() +
+  geom_smooth(method='lm')
+prehisp_poly_col_p = prehisp_poly_col_p %>% 
+  filter(prehisp_towns<11 & prehisp_towns>1)
+ggplot(data = prehisp_poly_col_p, aes(x = prehisp_towns, y =  colonial_towns))  +
+  geom_point() +
+  geom_smooth(method='lm')
+
+```

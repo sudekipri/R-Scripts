@@ -1,0 +1,64 @@
+<?xml version="1.0"?>
+<gpx version="1.1" creator="GDAL 2.2.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ogr="http://osgeo.org/gdal" xmlns="http://www.topografix.com/GPX/1/1" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+<metadata><bounds minlat="-33.855436000901499" minlon="-122.085703135350997" maxlat="51.502958560706901" maxlon="151.212200184784990"/></metadata>              
+<wpt lat="48.857800972662801" lon="2.29596768088743">
+  <name>The Eiffel Tower</name>
+  <extensions>
+    <ogr:description>Located in Paris, France</ogr:description>
+  </extensions>
+</wpt>
+<wpt lat="-22.950407157676" lon="-43.209535748439599">
+  <name>Christ the Redeemer</name>
+  <extensions>
+    <ogr:description>Located in Rio, Brazil</ogr:description>
+  </extensions>
+</wpt>
+<wpt lat="36.149369734299903" lon="-111.839335188888995">
+  <name>The Grand Canyon</name>
+  <extensions>
+    <ogr:description>Located in Arizona, USA</ogr:description>
+  </extensions>
+</wpt>
+<wpt lat="-33.855436000901499" lon="151.21220018478499">
+  <name>Sydney</name>
+  <extensions>
+    <ogr:description>New South Wales, Australia</ogr:description>
+  </extensions>
+</wpt>
+<wpt lat="41.902383564146803" lon="12.4586322927852">
+  <name>St Peters Basilica</name>
+  <extensions>
+    <ogr:description>Located in Vatican City</ogr:description>
+  </extensions>
+</wpt>
+<wpt lat="51.502958560706901" lon="-0.120803786375585">
+  <name>The London Eye</name>
+  <extensions>
+    <ogr:description>Located in London, England</ogr:description>
+  </extensions>
+</wpt>
+<wpt lat="41.728341701052898" lon="-49.948810093277601">
+  <name>The Titanic</name>
+  <extensions>
+    <ogr:description>Located in the North Atlantic Ocean</ogr:description>
+  </extensions>
+</wpt>
+<wpt lat="39.913799161022197" lon="116.390808876823996">
+  <name>The Forbidden City</name>
+  <extensions>
+    <ogr:description>Located in China</ogr:description>
+  </extensions>
+</wpt>
+<wpt lat="35.340630090438403" lon="138.781826572289987">
+  <name>Mount Fuji</name>
+  <extensions>
+    <ogr:description>Located near Tokyo, Japan</ogr:description>
+  </extensions>
+</wpt>
+<wpt lat="37.421695467529702" lon="-122.085703135350997">
+  <name>Google Headquarters</name>
+  <extensions>
+    <ogr:description>Located in Mountain View, California</ogr:description>
+  </extensions>
+</wpt>
+</gpx>

@@ -1,0 +1,215 @@
+---
+title: "HMW1_Sude_Buket_Kipri.qmd"
+output: html_document
+date: "2023-03-23"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#We would like to estimate the causal effect of using nitrogen on corn yield. We could get biased estimates if we worked with observational data only. Indeed, the farmers using nitrogen could be those who already know that their land is very productive. To rule out this possibility suppose we ran a randomized experiment on an 80-acre field. Moreover, such a procedure generates data on nitrogen doses (nitrogen rate) and yield measures. Finally, we have data on electric conductivity, a force that can interact with the nitrogen-based treatment. Thus, we must control electric conductivity (EC) to measure how it affects affects the marginal impact of nitrogen on corn.
+```
+
+```{r}
+if (!require("pacman")) install.packages("pacman")
+  pacman::p_load(
+  sf, # vector data operations
+  dplyr, # data wrangling
+  ggplot2, # for map creation
+  modelsummary, # regression table generation
+  patchwork # arrange multiple plots
+)
+```
+
+```{r}
+theme_for_map <-
+  theme(
+  axis.ticks = element_blank(),
+  axis.text = element_blank(),
+  axis.line = element_blank(),
+  panel.border = element_blank(),
+  panel.grid = element_line(color = "transparent"),
+  panel.background = element_blank(),
+  plot.background = element_rect(fill = "transparent", color = "transparent")
+  )
+```
+
+```{r}
+trial_design <- readRDS("HMW2_data/trial_design.rds")
+NH3 <- st_read("HMW2_data/NH3.gpkg")
+ec <- st_read("HMW2_data/ec.shp")
+yield <- readRDS("HMW2_data/yield.rds")
+```
+
+```{r}
+# plot Nitrogen rate 
+ggplot(data = trial_design) +
+  geom_sf(aes(fill = factor(NRATE))) +
+  scale_fill_brewer(name = "N", palette = "OrRd", direction = 1) +
+  theme_for_map
+```
+
+```{r}
+#yield map
+g_yield <-
+  ggplot() +
+  geom_sf(data = trial_design) +
+  geom_sf(data = yield, aes(color = yield), size = 0.5) +
+  scale_color_distiller(name = "Yield", palette = "OrRd", direction = 1) +
+  theme_for_map
+```
+
+```{r}
+#NH3 map
+g_NH3 <- ggplot() +
+  geom_sf(data = trial_design) +
+  geom_sf(data = NH3, aes(color = aa_NH3), size = 0.5) +
+  scale_color_distiller(name = "NH3", palette = "OrRd", direction = 1) +
+  theme_for_map
+```
+
+```{r}
+#ec map
+g_ec <- ggplot() +
+  geom_sf(data = trial_design) +
+  geom_sf(data = ec, aes(color = ec), size = 0.5) +
+  scale_color_distiller(name = "EC", palette = "OrRd", direction = 1) +
+  theme_for_map
+```
+
+```{r}
+g_yield / g_NH3 / g_ec
+```
+
+```{r}
+gen_subplots <- function(plot, num_sub) {
+
+  geom_mat <- st_geometry(plot)[[1]][[1]]
+
+  top_start <- (geom_mat[2, ])
+
+  top_end <- (geom_mat[3, ])
+
+  bot_start <- (geom_mat[1, ])
+  
+  bot_end <- (geom_mat[4, ])
+
+  top_step_vec <- (top_end - top_start) / num_sub
+  bot_step_vec <- (bot_end - bot_start) / num_sub
+
+ # list for sub-grid
+
+  subplots_ls <- list()
+
+  for (j in 1:num_sub) {
+    rec_pt1 <- top_start + (j - 1) * top_step_vec
+    rec_pt2 <- top_start + j * top_step_vec
+    rec_pt3 <- bot_start + j * bot_step_vec
+    rec_pt4 <- bot_start + (j - 1) * bot_step_vec
+
+    rec_j <- rbind(rec_pt1, rec_pt2, rec_pt3, rec_pt4, rec_pt1)
+
+    temp_quater_sf <- list(st_polygon(list(rec_j))) %>%
+      st_sfc(.) %>%
+      st_sf(., crs = 26914)
+
+    subplots_ls[[j]] <- temp_quater_sf
+  }
+
+  return(do.call("rbind", subplots_ls))
+}
+```
+
+```{r}
+# generate subplots
+subplots <-
+  lapply(
+    1:nrow(trial_design),
+    function(x) gen_subplots(trial_design[x, ], 6)
+  ) %>%
+  do.call("rbind", .)
+```
+
+```{r}
+# map of subplots
+ggplot(subplots) +
+  geom_sf() +
+  theme_for_map
+```
+
+```{r}
+(
+  reg_data <- subplots %>%
+    #yield
+    st_join(., aggregate(yield, ., mean), join = st_equals) %>%
+    #nitrogen
+    st_join(., aggregate(NH3, ., mean), join = st_equals) %>%
+    #EC
+    st_join(., aggregate(ec, ., mean), join = st_equals)
+)
+```
+
+```{r}
+(ggplot() +
+  geom_sf(data = reg_data, aes(fill = yield), color = NA) +
+  scale_fill_distiller(name = "Yield", palette = "OrRd", direction = 1) +
+  theme_for_map) /
+  (ggplot() +
+    geom_sf(data = reg_data, aes(fill = aa_NH3), color = NA) +
+    scale_fill_distiller(name = "NH3", palette = "OrRd", direction = 1) +
+    theme_for_map) /
+  (ggplot() +
+    geom_sf(data = reg_data, aes(fill = ec), color = NA) +
+    scale_fill_distiller(name = "EC", palette = "OrRd", direction = 1) +
+    theme_for_map)
+```
+
+```{r}
+ols_res <- lm(yield ~ aa_NH3 + I(aa_NH3^2) + I(aa_NH3 * ec) + I(aa_NH3^2 * ec), data = reg_data)
+
+modelsummary(
+  ols_res,
+  stars = TRUE,
+  gof_omit = "IC|Log|Adj|Wamenableudo"
+)
+```
+
+```{r}
+summary(ols_res)
+
+```
+
+```{r}
+# Here's an interpretation of the results obtained from linear regression:
+
+#1. Intercept (327.993): This is the expected value of 'yield' when all predictors (aa_NH3, aa_NH3^2, aa_NH3 * ec, and aa_NH3^2 * ec) are 0. It is statistically significant at the 1% level, which suggests that even without any predictors, the 'yield' would have a significant value of 327.993.
+
+#2. aa_NH3 (-1.223): This is the coefficient for aa_NH3, and it is not statistically significant given the conventional levels of significance (0.1, 0.05, 0.01). This means that a unit increase in aa_NH3 is associated with a decrease in 'yield' by 1.223, but this is not a statistically robust conclusion.
+
+#3. I(aa_NH3^2) (0.004): This suggests that the square of aa_NH3 has a positive effect on 'yield'. However, this effect is not statistically significant at the conventional levels, which means we can't confidently assert this relationship.
+
+#4. I(aa_NH3 * ec) (0.002): The interaction term between aa_NH3 and ec is not statistically significant at conventional levels, which suggests that the joint effect of aa_NH3 and ec on 'yield' is not significantly different from zero.
+
+#5. I(aa_NH3^2 * ec) (0.000): The interaction term between the square of aa_NH3 and ec is not statistically significant at conventional levels, which suggests that the joint effect of the square of aa_NH3 and ec on 'yield' is not significantly different from zero.
+
+#6. R-squared (0.010): This implies that the model explains only 1% of the variance in 'yield', which is quite low and suggests that the model's predictive power is weak.
+
+#7. RMSE (5.69): This is the Root Mean Squared Error, a measure of model fit. It tells us that the standard deviation of the residuals is 5.69. The lower the RMSE, the better the model's fit. Without other models to compare, it's hard to judge if this is good or bad.
+
+#Directed Acyclic Graph (DAG):
+
+#To draw a Directed Acyclic Graph (DAG) explaining why such results are amenable to causal interpretation, we need to make a few assumptions. Here, we're assuming that aa_NH3 and ec are the only relevant confounders and that there are no unmeasured confounders or reverse causation
+
+#We would have the following structure:
+
+    # aa_NH3 --> Yield
+    #  ↑        ↑
+   ##  |        |
+    # ec ------->
+
+#In this DAG, both aa_NH3 and ec independently affect Yield. The causal interpretation comes from our assumptions: if we hold all other variables constant, changing aa_NH3 should have a causal effect on Yield, as shown by the coefficients on aa_NH3 and its related terms in the regression.
+
+#However, the statistical insignificance of the regression coefficients and the very low R-squared value would cast doubt on the validity of a causal interpretation in this case. We would typically want statistical significance and a reasonably high R-squared to confidently interpret the regression coefficients as causal effects.
+```

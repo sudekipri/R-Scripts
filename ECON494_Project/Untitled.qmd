@@ -1,0 +1,645 @@
+---
+author: "Elif Çaysar, Giray Coşkun, Sude Buket Kipri, Zeynep Akant"
+title: "Econ 494 Spatial Data Science Project - Analysis of ACLED Report War in Ukraine"
+output: html_notebook
+institute: "Sabanci University"
+format:
+  pdf: default
+editor: visual
+---
+
+# ECON 494 - Spatial Data Science Project
+
+Our project aimed to analyze the Ukraine conflict using spatial analysis and maps generated through data from ACLED (Armed Conflict Location & Event Data Project). Focusing on the violence targeting civilians after invasion of Russia into Ukraine, we utilized R programming to extract and visualize the conflict data, enabling us to present a comprehensive overview of the events and their spatial distribution.
+
+```{r}
+library(sp)
+library(raster)
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(conflicted)
+```
+
+## Introduction
+
+-   Russia invaded Ukraine in February 2022, resulting in the highest levels of political violence recorded in a single country by ACLED.
+
+-   Civilians in Ukraine have faced shelling, indiscriminate strikes, deliberate attacks, and harsh treatment in occupied areas.
+
+-   Russian forces targeted Kyiv but retreated in northern Ukraine while quickly seizing territories in southern and eastern regions.
+
+-   Over 5,000 reported civilian fatalities have occurred, but the actual toll is likely much higher.
+
+-   Different regions of Ukraine experienced varying levels of violence and occupation during the conflict.
+
+```{r}
+#ukraine_states_rds <- raster::getData('GADM', country = "UKR", level = 1)
+ukraine_states_rds = readRDS("ukraine.rds") #https://gadm.org/download_country.html
+```
+
+```{r}
+ukraine_map <- ggplot() +
+  geom_polygon(data=ukraine_states_rds,  aes(x = long, y = lat, group = group, fill = id), fill="orange", alpha = 0.6 ) + guides(fill = "none")
+ukraine_map
+```
+
+```{r}
+east_ukraine_states_rds_names <- list("Dnipropetrovs'k", "Donets'k", "Luhans'k" ,  "Kharkiv", "Zaporizhzhya")
+
+east_ukraine_states_rds <- subset(ukraine_states_rds, NAME_1 %in% east_ukraine_states_rds_names)
+```
+
+```{r}
+south_ukraine_states_rds_names <- list("Chernihiv", "Kiev", "Kiev City", "Zhytomyr", "Sumy")
+south_ukraine_states_rds <- subset(ukraine_states_rds, NAME_1 %in% south_ukraine_states_rds_names)
+```
+
+```{r}
+central_ukraine_states_rds_names <- list("Cherkasy", "Kirovohrad", "Poltava", "Vinnytsya")
+central_ukraine_states_rds <- subset(ukraine_states_rds, NAME_1 %in% central_ukraine_states_rds_names)
+```
+
+```{r}
+western_ukraine_states_rds_names <- list("Volyn", "Chernivtsi", "Ivano-Frankivs'k", "Khmel'nyts'kyy", "Rivne", "L'viv", "Ternopil'", "Transcarpathia")
+western_ukraine_states_rds <- subset(ukraine_states_rds, NAME_1 %in% western_ukraine_states_rds_names)
+```
+
+```{r}
+southern_ukraine_states_rds_names <- list("Crimea", "Kherson",  "Mykolayiv", "Odessa")
+southern_ukraine_states_rds <- subset(ukraine_states_rds, NAME_1 %in% southern_ukraine_states_rds_names)
+```
+
+```{r}
+ukraine_map2 <- ukraine_map + 
+  geom_polygon(data=east_ukraine_states_rds,  aes(x = long, y = lat, group = group), fill="red", alpha=0.2, color="black") +
+  geom_polygon(data=south_ukraine_states_rds,  aes(x = long, y = lat, group = group), fill="black", alpha=0.2, color="black") +
+  geom_polygon(data=central_ukraine_states_rds,  aes(x = long, y = lat, group = group), fill="darkblue", alpha=0.4, color="black") +
+  geom_polygon(data=western_ukraine_states_rds,  aes(x = long, y = lat, group = group), fill="lightblue", alpha=0.2, color="black") +
+  geom_polygon(data=southern_ukraine_states_rds,  aes(x = long, y = lat, group = group), fill="orange", alpha=0.2, color="black")
+
+ukraine_map2
+```
+
+```{r}
+centroid <- ukraine_states_rds$centroid <- coordinates(ukraine_states_rds)
+ukraine_states_rds_names <- ukraine_states_rds$NAME_1
+```
+
+```{r}
+ukraine_map3 <- ukraine_map2 + 
+  geom_text(aes(x = centroid[, 1], y = centroid[, 2], label = ukraine_states_rds_names), size=2) + labs(title = "Regions of Ukraine", fontface="bold") + theme_void() + theme(plot.title = element_text(hjust = 0.5, face = "bold")) +  coord_map(projection = "albers", lat0 = 49, lat1 = 54)
+ukraine_map3
+```
+
+## Conflict Data (ACLED)
+
+```{r}
+eastern_ukraine_states_names = list("Dnipropetrovsk", "Luhansk", "Donetsk", "Kharkiv", "Zaporizhia")
+```
+
+```{r}
+conflict <- read_csv('ukraine.csv', show_col_types = FALSE)
+conflict$event_date <- as.Date(conflict$event_date, format = "%d %B %Y")
+```
+
+```{r}
+unique(conflict$admin1)
+```
+
+```{r}
+unique(conflict$event_type)
+```
+
+```{r}
+unique(conflict$sub_event_type)
+```
+
+## Apparent War Crimes in Northern Ukraine
+
+## Heavy Fighting Along the Frontline in Eastern Ukraine
+
+### Political Violence in Eastern Ukraine
+
+Eastern Ukraine faces unprecedented violence, with three-quarters of political violence events occurring in the region, primarily due to shelling, artillery, and missile attacks.
+Despite relative distance from the frontline, the Dnipropetrovsk region remains at risk, as Russia continues air and missile strikes, exemplified by the deadly incident in Dnipro on 14 January 2023.
+
+
+```{r}
+conflict_eastern_ukraine <- conflict %>%
+  dplyr::filter(
+                event_date >= as.Date("2022-02-01") & event_date <= as.Date("2023-01-31"),
+                event_type %in% c("Explosions/Remote violence", "Battles", "Violence against civilians"),
+                admin1 %in% eastern_ukraine_states_names)
+```
+
+```{r}
+event_counts_eastern_ukraine <- conflict_eastern_ukraine %>%
+  group_by(longitude, latitude) %>%
+  reframe(number_of_events = n(), event_type)
+```
+
+```{r}
+east_ukraine_states_rds
+```
+
+```{r}
+eastern_ukraine_map <- ggplot() +
+  geom_polygon(data=east_ukraine_states_rds,  aes(x = long, y = lat, group = group), fill="orange", alpha=0.2, color="black") + guides(fill = "none") + theme_void()
+eastern_ukraine_map
+```
+
+```{r}
+centroid <- east_ukraine_states_rds$centroid <- coordinates(east_ukraine_states_rds)
+centroid[2] = centroid[2]+0.4
+centroid[7] = centroid[7]-0.4
+centroid[3] = centroid[3]-0.4
+text <- geom_text(data = , aes(x = centroid[, 1], y = centroid[, 2], label = c("Dnipropetrovsk", "Donetsk", "Kharkiv", "Luhansk", "Zaporizhia")), color = "black", size = 4)
+```
+
+```{r}
+eastern_ukraine_map +
+  geom_point(data = event_counts_eastern_ukraine, aes(x = longitude, y = latitude, size = number_of_events, color=event_type)) +
+  geom_point(color="black", shape=21, data = event_counts_eastern_ukraine, aes(x = longitude, y = latitude, size = number_of_events, fill=event_type)) +
+  scale_size_continuous(range = c(0.1, 5)) +
+  labs(color = "Event Type", size = "Number of Events") +
+  labs(title = "Political Violence in Eastern Ukraine", fontface="bold") + 
+  labs(subtitle = "February 2022 - January 2023 ") +
+  coord_map(projection = "albers", lat0 = 49, lat1 = 54) +
+  theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5)) +
+  text
+```
+
+### Conflict in Kharkiv
+
+Although Russian forces were unable to break Ukrainian defenses around the city of Kharkiv, they had occupied the bulk of the region’s northern and eastern parts by April 2022, including Izium – a critical transport hub
+Ukraine liberated almost the entire region in a surprise counter-offensive in September 2022.
+Of over 800 events targeting civilians, about three-quarters constituted artillery, missile, and airstrike events, which also resulted in the majority of reported civilian fatalities recorded in the region. About a third of these occurred in March 2022 alone.
+
+
+
+```{r}
+conflict_kharkiv <- conflict %>%
+  dplyr::filter(
+                civilian_targeting != "",
+                event_date >= as.Date("2022-02-01") & event_date <= as.Date("2023-01-31"),
+                admin1 == "Kharkiv")
+```
+
+```{r}
+# Create a new column called 'new_event_type'
+conflict_kharkiv$new_event_type <- NA
+
+# Map values based on 'sub_event_type'
+conflict_kharkiv$new_event_type[conflict_kharkiv$sub_event_type %in% c("Shelling/artillery/missile attack", "Air/drone strike", "Remote explosive/landmine/IED", "Attack")] <- conflict_kharkiv$sub_event_type[conflict_kharkiv$sub_event_type %in% c("Shelling/artillery/missile attack", "Air/drone strike", "Remote explosive/landmine/IED", "Attack")]
+conflict_kharkiv$new_event_type[!(conflict_kharkiv$sub_event_type %in% c("Shelling/artillery/missile attack", "Air/drone strike", "Remote explosive/landmine/IED", "Attack"))] <- "Other violence"
+```
+
+```{r}
+number_of_events_kharkiv <- conflict_kharkiv %>%
+  group_by(longitude, latitude) %>%
+  reframe(number_of_events = n(), new_event_type)
+```
+
+```{r}
+kharkiv <- subset(ukraine_states_rds, NAME_1 == "Kharkiv")
+kharkiv_map <- ggplot() +
+  geom_polygon(data=kharkiv,  aes(x = long, y = lat, group = group), fill="orange", alpha=0.2, color="black") + guides(fill = "none") + theme_void()
+kharkiv_map
+```
+
+```{r}
+kharkiv_map +
+  geom_point(data = number_of_events_kharkiv, aes(x = longitude, y = latitude, size = number_of_events, color=new_event_type)) +
+  geom_point(color="black", shape=21, data = number_of_events_kharkiv, aes(x = longitude, y = latitude, size = number_of_events, fill=new_event_type)) +
+  scale_size_continuous(range = c(0.1, 10)) +
+  labs(color = "Sub-Event Type", size = "Number of Events") +
+  labs(title = "Violence targeting Civilians in Kharkiv", fontface="bold") + 
+  labs(subtitle = "February 2022 - January 2023 ") +
+  coord_map(projection = "albers", lat0 = 49, lat1 = 54) +
+  theme(plot.title = element_text(hjust = 0.5, face="bold"), plot.subtitle = element_text(hjust = 0.5))
+```
+
+### Conflict in Luhansk
+
+The sheer scale of artillery, missile, and air attacks inflicted on Luhansk region as well as intense close combat brought about immense suffering for the civilians.
+On 11 March 2022, 56 elderly patients reportedly died during the shelling of a nursing home in Kreminna, and at least 60 people were killed in an airstrike on a school used as a shelter in Bilohorivka on 7 May 2022. Over 50 civilians were also killed during the shelling of Severodonetsk in March and May 2022. 
+Following the Russian occupation of the region in summer 2022, the number of reports of civilians being targeted went sharply down; though the region has remained highly kinetic, especially since autumn. 
+
+
+```{r}
+conflict_luhansk <- conflict %>%
+  dplyr::filter(
+                civilian_targeting != "",
+                event_date >= as.Date("2022-02-01") & event_date <= as.Date("2023-01-31"),
+                admin1 == "Luhansk")
+```
+
+```{r}
+# Create a new column called 'new_event_type'
+conflict_luhansk$new_event_type <- NA
+
+# Map values based on 'sub_event_type'
+conflict_luhansk$new_event_type[conflict_luhansk$sub_event_type %in% c("Shelling/artillery/missile attack", "Air/drone strike", "Abduction/forced disappearance" , "Attack")] <- conflict_luhansk$sub_event_type[conflict_luhansk$sub_event_type %in% c("Shelling/artillery/missile attack", "Air/drone strike", "Abduction/forced disappearance" , "Attack")]
+conflict_luhansk$new_event_type[!(conflict_luhansk$sub_event_type %in% c("Shelling/artillery/missile attack", "Air/drone strike", "Abduction/forced disappearance" , "Attack"))] <- "Other violence"
+```
+
+```{r}
+number_of_events_luhansk <- conflict_luhansk %>%
+  group_by(longitude, latitude) %>%
+  reframe(number_of_events = n(), new_event_type)
+```
+
+```{r}
+luhansk <- subset(ukraine_states_rds, NAME_1 == "Luhans'k")
+luhansk_map <- ggplot() +
+  geom_polygon(data=luhansk,  aes(x = long, y = lat, group = group), fill="orange", alpha=0.2, color="black") + guides(fill = "none") + theme_void()
+luhansk_map
+```
+
+```{r}
+luhansk_map +
+  geom_point(data = number_of_events_luhansk, aes(x = longitude, y = latitude, size = number_of_events, color=new_event_type)) +
+  geom_point(color="black", shape=21, data = number_of_events_luhansk, aes(x = longitude, y = latitude, size = number_of_events, fill=new_event_type)) +
+  scale_size_continuous(range = c(0.1, 10)) +
+  labs(color = "Sub-Event Type", size = "Number of Events") +
+  labs(title = "Violence targeting Civilians in Luhansk", fontface="bold") + 
+  labs(subtitle = "February 2022 - January 2023 ") +
+  coord_map(projection = "albers", lat0 = 49, lat1 = 54) +
+  theme(plot.title = element_text(hjust = 0.5, face="bold"), plot.subtitle = element_text(hjust = 0.5))
+```
+
+### Conflict in Donetsk
+
+ACLED records over 16,000 events in Donetsk region, of which over 12,000 were attributed to shelling, artillery, missile, and airstrike events. Only a small portion of these events – about 800 – could be attributed to the direct targeting of civilian.
+The city of Mariupol was the site of several mass casualty events ahead of the Russian occupation. 
+Mass casualty events due to long-range missile and artillery strikes occurred in other parts of the region and on both sides of the line of contact.
+
+
+```{r}
+conflict_donetsk <- conflict %>%
+  dplyr::filter(
+                civilian_targeting != "",
+                event_date >= as.Date("2022-02-01") & event_date <= as.Date("2023-01-31"),
+                admin1 == "Donetsk")
+```
+
+```{r}
+# Create a new column called 'new_event_type'
+conflict_donetsk$new_event_type <- NA
+
+# Map values based on 'sub_event_type'
+conflict_donetsk$new_event_type[conflict_donetsk$sub_event_type %in% c("Shelling/artillery/missile attack", "Air/drone strike", "Abduction/forced disappearance" , "Remote explosive/landmine/IED")] <- conflict_donetsk$sub_event_type[conflict_donetsk$sub_event_type %in% c("Shelling/artillery/missile attack", "Air/drone strike", "Abduction/forced disappearance" , "Remote explosive/landmine/IED")]
+conflict_donetsk$new_event_type[!(conflict_donetsk$sub_event_type %in% c("Shelling/artillery/missile attack", "Air/drone strike", "Abduction/forced disappearance" , "Remote explosive/landmine/IED"))] <- "Other violence"
+```
+
+```{r}
+number_of_events_donetsk <- conflict_donetsk %>%
+  group_by(longitude, latitude) %>%
+  reframe(number_of_events = n(), new_event_type)
+```
+
+```{r}
+donetsk <- subset(ukraine_states_rds, NAME_1 == "Donets'k")
+donetsk_map <- ggplot() +
+  geom_polygon(data=donetsk,  aes(x = long, y = lat, group = group), fill="orange", alpha=0.2, color="black") + guides(fill = "none") + theme_void()
+donetsk_map
+```
+
+```{r}
+donetsk_map +
+  geom_point(data = number_of_events_donetsk, aes(x = longitude, y = latitude, size = number_of_events, color=new_event_type)) +
+  geom_point(color="black", shape=21, data = number_of_events_donetsk, aes(x = longitude, y = latitude, size = number_of_events, fill=new_event_type)) +
+  scale_size_continuous(range = c(0.1, 10)) +
+  labs(color = "Sub-Event Type", size = "Number of Events") +
+  labs(title = "Violence targeting Civilians in Donetsk", fontface="bold") + 
+  labs(subtitle = "February 2022 - January 2023 ") +
+  coord_map(projection = "albers", lat0 = 49, lat1 = 54) +
+  theme(plot.title = element_text(hjust = 0.5, face="bold"), plot.subtitle = element_text(hjust = 0.5))
+```
+
+### Conflict in Zaporizhia
+
+Russian forces occupied most of the Zaporizhia region in the first weeks of the invasion, capturing the entire shore of the Sea of Azov, including the Ukrainian navy base in Berdiansk, and an area stretching between the Kherson and southern Donetsk regions up to the Dnipro river, including the second-largest town of Melitopol.
+Ukrainian forces stopped Russian forces in the area of Orikhiv and Huliaipole
+Although shelling and air and drone strikes have accounted for about half of events targeting civilians in the Zaporizhia region, civilians have also been the subject of direct attacks. These include firing at vehicles carrying evacuating civilians, as well as torture and execution.
+In areas under Russian occupation, reports of the abduction of local officials, teachers, journalists, Ukrainian army veterans, and civil activists are common.
+
+
+
+
+```{r}
+conflict_zaporizhia <- conflict %>%
+  dplyr::filter(
+                civilian_targeting != "",
+                event_date >= as.Date("2022-02-01") & event_date <= as.Date("2023-01-31"),
+                admin1 == "Zaporizhia")
+```
+
+```{r}
+# Create a new column called 'new_event_type'
+conflict_zaporizhia$new_event_type <- NA
+
+# Map values based on 'sub_event_type'
+conflict_zaporizhia$new_event_type[conflict_zaporizhia$sub_event_type %in% c("Attack", "Shelling/artillery/missile attack", "Air/drone strike", "Abduction/forced disappearance" , "Remote explosive/landmine/IED")] <- conflict_zaporizhia$sub_event_type[conflict_zaporizhia$sub_event_type %in% c("Attack","Shelling/artillery/missile attack", "Air/drone strike", "Abduction/forced disappearance" , "Remote explosive/landmine/IED")]
+conflict_zaporizhia$new_event_type[!(conflict_zaporizhia$sub_event_type %in% c("Attack","Shelling/artillery/missile attack", "Air/drone strike", "Abduction/forced disappearance" , "Remote explosive/landmine/IED"))] <- "Other violence"
+```
+
+```{r}
+number_of_events_zaporizhia <- conflict_zaporizhia %>%
+  group_by(longitude, latitude) %>%
+  reframe(number_of_events = n(), new_event_type)
+```
+
+```{r}
+zaporizhia <- subset(ukraine_states_rds, NAME_1 == "Zaporizhzhya")
+zaporizhia_map <- ggplot() +
+  geom_polygon(data=zaporizhia,  aes(x = long, y = lat, group = group), fill="orange", alpha=0.2, color="black") + guides(fill = "none") + theme_void()
+zaporizhia_map
+```
+
+```{r}
+zaporizhia_map +
+  geom_point(data = number_of_events_zaporizhia, aes(x = longitude, y = latitude, size = number_of_events, color=new_event_type)) +
+  geom_point(color="black", shape=21, data = number_of_events_zaporizhia, aes(x = longitude, y = latitude, size = number_of_events, fill=new_event_type)) +
+  scale_size_continuous(range = c(0.1, 10)) +
+  labs(color = "Sub-Event Type", size = "Number of Events") +
+  labs(title = "Violence targeting Civilians in Zaporizhia", fontface="bold") + 
+  labs(subtitle = "February 2022 - January 2023 ") +
+  coord_map(projection = "albers", lat0 = 49, lat1 = 54) +
+  theme(plot.title = element_text(hjust = 0.5, face="bold"), plot.subtitle = element_text(hjust = 0.5))
+```
+
+## Explosive Threats for Civilians in Southern Ukraine
+
+Russian attempts for landings from the Black Sea were unsuccessful.
+Russian forces invaded southern Ukraine from the annexed Crimean peninsula, successfully overtaking the Kherson region and its main city in March 2022.
+The Kherson and Mykolaiv regions experienced significant violence, with artillery strikes leading to high fatality numbers.
+The most common types of violence in Kherson were abductions, forced disappearances, torture, targeting primarily officials, journalists, activists, and those suspected of pro-Ukrainian views.
+In June 2022, Russian forces reportedly abducted about 50 Crimean Tatars from Kherson.
+Two significant incidents in the Odesa region include a missile strike that killed 8 and injured 10 civilians on April 2022, and an airstrike that killed at least 21 civilians on July 2022.
+
+
+
+```{r}
+southern_ukraine_states_name = c("Mykolaiv", "Kherson", "Crimea", "Odesa" )
+conflict_southern_ukraine <- conflict %>%
+  dplyr::filter(
+                civilian_targeting != "",
+                event_date >= as.Date("2022-02-01") & event_date <= as.Date("2023-01-31"),
+                admin1 %in% southern_ukraine_states_name)
+```
+
+```{r}
+# Create a new column called 'new_event_type'
+conflict_southern_ukraine$new_event_type <- NA
+
+# Map values based on 'sub_event_type'
+conflict_southern_ukraine$new_event_type[conflict_southern_ukraine$sub_event_type %in% c("Attack", "Abduction/forced disappearance" , "Remote explosive/landmine/IED")] <- conflict_southern_ukraine$sub_event_type[conflict_southern_ukraine$sub_event_type %in% c("Attack", "Abduction/forced disappearance" , "Remote explosive/landmine/IED")]
+conflict_southern_ukraine$new_event_type[!(conflict_southern_ukraine$sub_event_type %in% c("Attack", "Abduction/forced disappearance" , "Remote explosive/landmine/IED"))] <- "Other violence"
+```
+
+```{r}
+number_of_events_southern_ukraine <- conflict_southern_ukraine %>%
+  group_by(longitude, latitude) %>%
+  reframe(number_of_events = n(), new_event_type)
+```
+
+```{r}
+southern_ukraine <- subset(ukraine_states_rds, NAME_1 %in% southern_ukraine_states_rds_names)
+southern_ukraine_map <- ggplot() +
+  geom_polygon(data=southern_ukraine,  aes(x = long, y = lat, group = group), fill="orange", alpha=0.2, color="black") + guides(fill = "none") + theme_void()
+southern_ukraine_map
+```
+
+```{r}
+southern_ukraine_map +
+  geom_point(data = number_of_events_southern_ukraine, aes(x = longitude, y = latitude, size = number_of_events, color=new_event_type)) +
+  geom_point(color="black", shape=21, data = number_of_events_southern_ukraine, aes(x = longitude, y = latitude, size = number_of_events, fill=new_event_type)) +
+  scale_size_continuous(range = c(0.1, 10)) +
+  labs(color = "Sub-Event Type", size = "Number of Events") +
+  labs(title = "Violence targeting Civilians in Southern Ukraine", fontface="bold") + 
+  labs(subtitle = "February 2022 - January 2023 ") +
+  coord_map(projection = "albers", lat0 = 49, lat1 = 54) +
+  theme(plot.title = element_text(hjust = 0.5, face="bold"), plot.subtitle = element_text(hjust = 0.5))
+```
+
+## Constant Menace from the Skies in Central and Western Ukraine
+
+Over 150 Russian missile, air, and drone strikes have targeted the Central and West regions, posing a significant threat to civilian safety.
+Approximately one-fifth of these strikes hit civilian areas, leading to over 80 fatalities.
+Two incidents accounted for most of the reported fatalities: a missile strike on a shopping mall, in Poltava, on June 2022, and a missile strike on a Vinnytsia concert hall on July 2022.
+At least 50 Russian strikes targeted energy infrastructure deep within Ukraine which caused power outages, with Vinnytsia being one of the most affected regions.
+
+
+
+
+```{r}
+unique(conflict$admin1)
+```
+
+```{r}
+central_western_ukraine_states_name <-  c("Volyn", "Rivne", "Lviv", "Ternopil", "Khmelnytskyi", "Ivano-Frankivsk", "Zakarpattia", "Chernivtsi", "Vinnytsia", "Cherkasy", "Kirovograd", "Poltava" )
+```
+
+```{r}
+
+conflict_central_western_ukraine <- conflict %>%
+  dplyr::filter(
+                event_date >= as.Date("2022-02-01") & event_date <= as.Date("2023-01-31"),
+                sub_event_type == "Shelling/artillery/missile attack",
+                admin1 %in% central_western_ukraine_states_name
+                )
+```
+
+```{r}
+number_of_events_central_western_ukraine <- conflict_central_western_ukraine %>%
+  group_by(latitude, longitude) %>%
+  summarize(number_of_events = n(), .groups = "drop")
+```
+
+```{r}
+central_western_ukraine <- subset(ukraine_states_rds, NAME_1 %in% central_ukraine_states_rds_names | NAME_1 %in% western_ukraine_states_rds_names)
+central_western_ukraine_map <- ggplot() +
+  geom_polygon(data=central_western_ukraine,  aes(x = long, y = lat, group = group), fill="orange", alpha=0.2, color="black") + guides(fill = "none") + theme_void()
+central_western_ukraine_map
+```
+
+```{r}
+central_western_ukraine_map +
+  geom_point(color="black", shape=21, fill="darkblue", alpha=0.6, data = number_of_events_central_western_ukraine, aes(x = longitude, y = latitude, size = number_of_events)) +
+  scale_size_continuous(range = c(1, 10), guide = 'legend', breaks = c(1, 10, 20, 50), labels = c("1", "10", "20", "50+")) +
+  labs(size = "Number of Events") +
+  labs(title = "Long-Range Strikes in Central and Western Ukraine", fontface="bold") + 
+  labs(subtitle = "February 2022 - January 2023 ") +
+  coord_map(projection = "albers", lat0 = 49, lat1 = 54) +
+  theme(plot.title = element_text(hjust = 0.5, face="bold"), plot.subtitle = element_text(hjust = 0.5))
+```
+
+## Interactive Map
+
+```{r}
+library(leaflet)
+```
+
+```{r}
+ukraine_interactive_map <- leaflet() %>%
+  addTiles() %>%
+  setView(lng = 37.7933, lat = 48.1450, zoom = 7)
+ukraine_interactive_map
+```
+
+```{r}
+eastern_ukraine_states_names = list("Dnipropetrovsk", "Luhansk", "Donetsk", "Kharkiv", "Zaporizhia")
+conflict_eastern_ukraine <- conflict %>%
+  dplyr::filter(
+                event_date >= as.Date("2022-02-01") & event_date <= as.Date("2023-01-31"),
+                event_type %in% c("Explosions/Remote violence", "Battles", "Violence against civilians"),
+                admin1 %in% eastern_ukraine_states_names)
+```
+
+```{r}
+events <- data.frame(latitude = conflict_eastern_ukraine$latitude,
+                     longitude = conflict_eastern_ukraine$longitude)
+```
+
+```{r}
+m <- ukraine_interactive_map %>%
+  addCircleMarkers(data = events,
+                   lng = ~longitude,
+                   lat = ~latitude,
+                   radius = 1,
+                   color = "red",
+                   fill = TRUE,
+                   fillOpacity = 0.8)
+
+# Display the map
+m
+```
+
+```{r}
+m2 <- addPolygons(
+  map = m,
+  data = east_ukraine_states_rds,
+  fillColor = "orange",
+  fillOpacity = 0.2,
+  color = "black",
+  weight = 1
+)
+m2
+```
+
+## Pre-Invasion
+
+The Euromaidan protests, which started in late 2013, were primarily centered in the capital city of Kyiv (Kiev) but spread to other regions as well. The protests involved clashes between demonstrators and law enforcement, resulting in instances of violence, injuries, and fatalities.
+
+Before the Russian invasion the violence in eastern Ukraine was already concentrated in areas close to the Ukrainian-Russian border, particularly in the Donetsk and Luhansk regions. Cities such as Donetsk, Luhansk, Mariupol, and Sloviansk witnessed intense fighting and became hotspots of violence.
+
+Both sides of the conflict engaged in military operations, including artillery shelling, sniper attacks, and armed clashes. The violence was not limited to specific cities but was spread across the conflict-affected regions.
+
+The conflict resulted in a significant number of civilian casualties and widespread displacement of residents. Civilians, including those living in towns and villages near the front lines, faced the risk of violence and were often caught in the crossfire.
+
+```{r}
+ukraine_map2
+```
+
+```{r}
+centroid <- ukraine_states_rds$centroid <- coordinates(ukraine_states_rds)
+text <- geom_text(data = , aes(x = centroid[, 1], y = centroid[, 2], label = ukraine_states_rds$NAME_1), color = "black", size = 4)
+```
+
+```{r}
+pi_ukraine_map <- ukraine_map2 + 
+  geom_text(aes(x = centroid[, 1], y = centroid[, 2], label = ukraine_states_rds_names), size=2) + labs(title = "Pre-Invasion Conflicts", fontface="bold") + theme_void() + theme(plot.title = element_text(hjust = 0.5, face = "bold")) +  coord_map(projection = "albers", lat0 = 49, lat1 = 54)
+pi_ukraine_map
+```
+
+```{r}
+conflict_pi_ukraine <- conflict %>%
+  dplyr::filter(
+                event_date <= as.Date("2022-02-01"),
+                 civilian_targeting != ""
+                )
+```
+
+```{r}
+number_of_events_pi_ukraine <- conflict_pi_ukraine %>%
+  group_by(longitude, latitude) %>%
+  reframe(number_of_events = n(), event_type)
+```
+
+```{r}
+pi_ukraine_map +
+  geom_point(data = number_of_events_pi_ukraine, aes(x = longitude, y = latitude, size = number_of_events, color=event_type)) +
+  geom_point(color="black", shape=21, data = number_of_events_pi_ukraine, aes(x = longitude, y = latitude, size = number_of_events, fill=event_type)) +
+  scale_size_continuous(range = c(0.1, 10)) +
+  labs(color = "Event Type", size = "Number of Events") +
+  labs(title = "Violence targeting Civilians in Pre-Invasion Ukraine", fontface="bold") + 
+  labs(subtitle = "Before February 2022 ") +
+  coord_map(projection = "albers", lat0 = 49, lat1 = 54) +
+  theme(plot.title = element_text(hjust = 0.5, face="bold"), plot.subtitle = element_text(hjust = 0.5))
+```
+
+## Political Violence in Eastern Ukraine Pre-Invasion
+
+```{r}
+conflict_eastern_ukraine_pi <- conflict %>%
+  dplyr::filter(
+                disorder_type == "Political violence",
+                event_date < as.Date("2022-02-01"),
+                event_type %in% c("Explosions/Remote violence", "Battles", "Violence against civilians"),
+                admin1 %in% eastern_ukraine_states_names)
+```
+
+```{r}
+event_counts_eastern_ukraine_pi <- conflict_eastern_ukraine_pi %>%
+  group_by(longitude, latitude) %>%
+  reframe(number_of_events = n(), event_type)
+```
+
+```{r}
+eastern_ukraine_map <- ggplot() +
+  geom_polygon(data=east_ukraine_states_rds,  aes(x = long, y = lat, group = group), fill="orange", alpha=0.2, color="black") + guides(fill = "none") + theme_void()
+eastern_ukraine_map
+```
+
+```{r}
+centroid <- east_ukraine_states_rds$centroid <- coordinates(east_ukraine_states_rds)
+centroid[2] = centroid[2]+0.4
+centroid[7] = centroid[7]-0.4
+centroid[3] = centroid[3]-0.4
+text <- geom_text(data = , aes(x = centroid[, 1], y = centroid[, 2], label = c("Dnipropetrovsk", "Donetsk", "Kharkiv", "Luhansk", "Zaporizhia")), color = "black", size = 4)
+```
+
+```{r}
+eastern_ukraine_map +
+  geom_point(data = event_counts_eastern_ukraine_pi, aes(x = longitude, y = latitude, size = number_of_events, color=event_type)) +
+  geom_point(color="black", shape=21, data = event_counts_eastern_ukraine_pi, aes(x = longitude, y = latitude, size = number_of_events, fill=event_type)) +
+  scale_size_continuous(range = c(0.1, 5)) +
+  labs(color = "Event Type", size = "Number of Events") +
+  labs(title = "Political Violence in Eastern Ukraine Pre-Invasion", fontface="bold") + 
+  labs(subtitle = "February 2022 - January 2023 ") +
+  coord_map(projection = "albers", lat0 = 49, lat1 = 54) +
+  theme(plot.title = element_text(hjust = 0.5, face="bold"), plot.subtitle = element_text(hjust = 0.5)) +
+  text
+```
+
+```{r}
+conflict_ukraine_pi_riots <- conflict %>%
+  dplyr::filter(
+                disorder_type == "Political violence",
+                event_date < as.Date("2022-02-01"),
+                event_type == "Riots"
+                )
+```
+
+```{r}
+ukraine_map2 +
+  geom_point(color="black", shape=21, fill="orange", alpha=0.6, data = conflict_ukraine_pi_riots, aes(x = longitude, y = latitude, size = 1)) +
+  labs(title = "Riots in Pre-Invasion Ukraine", fontface="bold") + 
+  labs(subtitle = "Before February 2022 ") +
+  coord_map(projection = "albers", lat0 = 49, lat1 = 54) +
+  guides(size = "none") +
+  theme_void() +
+  theme(plot.title = element_text(hjust = 0.5, face="bold"), plot.subtitle = element_text(hjust = 0.5))
+```
